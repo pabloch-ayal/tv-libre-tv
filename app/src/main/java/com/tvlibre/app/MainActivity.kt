@@ -39,7 +39,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -59,8 +62,15 @@ private val BgDeep = Color(0xFF0A0E1A)
 private val CardDark = Color(0xFF131B2E)
 private val CardFocus = Color(0xFF1E293B)
 private val AccentCyan = Color(0xFF06B6D4)
-private val AccentPurple = Color(0xFF6366F1)
+private val AccentPurple = Color(0xFF7C3AED)
 private val AccentOrange = Color(0xFFFF5722)
+
+data class TrackOption(
+    val label: String,
+    val group: Tracks.Group?,
+    val trackIndex: Int,
+    val isOffOption: Boolean = false
+)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -83,6 +93,7 @@ fun TvLibreAndroidTvApp() {
     var searchQuery by remember { mutableStateOf("") }
     var showSearchBar by remember { mutableStateOf(false) }
     var showSourceDialog by remember { mutableStateOf(false) }
+    var showTrackDialog by remember { mutableStateOf(false) }
     var isFullscreen by remember { mutableStateOf(false) }
     var statusText by remember { mutableStateOf("Cargando catálogo...") }
 
@@ -154,7 +165,7 @@ fun TvLibreAndroidTvApp() {
     }
 
     suspend fun reloadAllData(sourcesList: List<String> = savedSources) {
-        statusText = "Sincronizando canales, partidos y VOD..."
+        statusText = "Sincronizando..."
         withContext(Dispatchers.IO) {
             val allCh = mutableListOf<TvChannel>()
             val allMov = mutableListOf<VodItem>()
@@ -200,7 +211,7 @@ fun TvLibreAndroidTvApp() {
                 movies = cleanMov
                 series = cleanSer
                 matches = cleanMat
-                statusText = "${cleanCh.size} TV • ${cleanMat.size} Partidos • ${cleanMov.size} Películas"
+                statusText = "${cleanCh.size} canales • ${cleanMat.size} partidos • ${cleanMov.size} cine"
                 if (currentStreamUrl.isEmpty() && cleanCh.isNotEmpty()) {
                     playStream(cleanCh.first().streamUrl, cleanCh.first().title, false)
                 }
@@ -212,8 +223,9 @@ fun TvLibreAndroidTvApp() {
         reloadAllData()
     }
 
-    BackHandler(enabled = isFullscreen || selectedVodDetail != null || showSearchBar) {
+    BackHandler(enabled = showTrackDialog || isFullscreen || selectedVodDetail != null || showSearchBar) {
         when {
+            showTrackDialog -> showTrackDialog = false
             isFullscreen -> isFullscreen = false
             selectedVodDetail != null -> selectedVodDetail = null
             showSearchBar -> {
@@ -223,13 +235,43 @@ fun TvLibreAndroidTvApp() {
         }
     }
 
+    // MODO PANTALLA COMPLETA SIN CUADRO AMARILLO Y CON CONTROLES DE SUBTÍTULOS / AUDIO / CALIDAD
     if (isFullscreen) {
-        Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+        var showOsd by remember { mutableStateOf(true) }
+        var isPaused by remember { mutableStateOf(false) }
+
+        LaunchedEffect(showOsd, currentStreamUrl, showTrackDialog) {
+            if (showOsd && !showTrackDialog) {
+                delay(3500)
+                showOsd = false
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .focusable()
+                .clickable {
+                    if (!showOsd) {
+                        showOsd = true
+                    } else {
+                        if (exoPlayer.isPlaying) {
+                            exoPlayer.pause()
+                            isPaused = true
+                        } else {
+                            exoPlayer.play()
+                            isPaused = false
+                        }
+                    }
+                }
+        ) {
             AndroidView(
                 factory = { ctx ->
                     PlayerView(ctx).apply {
                         player = exoPlayer
-                        useController = true
+                        useController = false
+                        isFocusable = false
                         layoutParams = FrameLayout.LayoutParams(
                             FrameLayout.LayoutParams.MATCH_PARENT,
                             FrameLayout.LayoutParams.MATCH_PARENT
@@ -238,59 +280,217 @@ fun TvLibreAndroidTvApp() {
                 },
                 modifier = Modifier.fillMaxSize()
             )
-            Row(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.55f))
-                    .padding(horizontal = 24.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(currentStreamTitle, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                TvFocusButton("Salir pantalla completa (Atrás)", AccentOrange) { isFullscreen = false }
+
+            if (showOsd) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.88f))))
+                        .padding(horizontal = 28.dp, vertical = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(
+                            if (isPaused) Icons.Default.PauseCircle else Icons.Default.PlayCircle,
+                            contentDescription = null,
+                            tint = AccentCyan,
+                            modifier = Modifier.size(34.dp)
+                        )
+                        Column {
+                            Text(currentStreamTitle, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            Text("OK: Pausar/Reanudar  •  Atrás: Salir", color = Color.LightGray, fontSize = 12.sp)
+                        }
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        TvFocusButton("Subtítulos / Audio / Calidad", AccentPurple) {
+                            showOsd = true
+                            showTrackDialog = true
+                        }
+                        TvFocusButton("Salir (Atrás)", CardFocus) { isFullscreen = false }
+                    }
+                }
+            }
+        }
+
+        // Diálogo selector de Subtítulos, Audio y Resolución
+        if (showTrackDialog) {
+            val tracks = exoPlayer.currentTracks
+            val subtitleOptions = remember(tracks) {
+                val list = mutableListOf(TrackOption("Desactivar subtítulos", null, -1, isOffOption = true))
+                for (group in tracks.groups) {
+                    if (group.type == C.TRACK_TYPE_TEXT) {
+                        for (i in 0 until group.length) {
+                            val fmt = group.getTrackFormat(i)
+                            val lang = fmt.language ?: "Subtítulo ${i + 1}"
+                            val label = fmt.label ?: lang.uppercase()
+                            list.add(TrackOption(label, group, i))
+                        }
+                    }
+                }
+                list
+            }
+            val audioOptions = remember(tracks) {
+                val list = mutableListOf<TrackOption>()
+                for (group in tracks.groups) {
+                    if (group.type == C.TRACK_TYPE_AUDIO) {
+                        for (i in 0 until group.length) {
+                            val fmt = group.getTrackFormat(i)
+                            val lang = fmt.language ?: "Pista ${i + 1}"
+                            val label = fmt.label ?: lang.uppercase()
+                            list.add(TrackOption(label, group, i))
+                        }
+                    }
+                }
+                list
+            }
+            val videoOptions = remember(tracks) {
+                val list = mutableListOf(TrackOption("Automática (Mejor disponible)", null, -1, isOffOption = true))
+                for (group in tracks.groups) {
+                    if (group.type == C.TRACK_TYPE_VIDEO) {
+                        for (i in 0 until group.length) {
+                            val fmt = group.getTrackFormat(i)
+                            if (fmt.height > 0) {
+                                list.add(TrackOption("${fmt.height}p (${fmt.width}x${fmt.height})", group, i))
+                            }
+                        }
+                    }
+                }
+                list
+            }
+
+            Dialog(onDismissRequest = { showTrackDialog = false }) {
+                Column(
+                    modifier = Modifier
+                        .width(560.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(CardDark)
+                        .border(2.dp, AccentCyan, RoundedCornerShape(16.dp))
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("Opciones de Reproducción", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+
+                    Text("Subtítulos:", color = AccentCyan, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(subtitleOptions) { opt ->
+                            TvFocusButton(opt.label, CardFocus) {
+                                val builder = exoPlayer.trackSelectionParameters.buildUpon()
+                                if (opt.isOffOption) {
+                                    builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                                } else if (opt.group != null) {
+                                    builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                                    builder.setOverrideForType(TrackSelectionOverride(opt.group.mediaTrackGroup, opt.trackIndex))
+                                }
+                                exoPlayer.trackSelectionParameters = builder.build()
+                                showTrackDialog = false
+                            }
+                        }
+                    }
+
+                    if (audioOptions.isNotEmpty()) {
+                        Text("Idioma / Audio:", color = AccentCyan, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(audioOptions) { opt ->
+                                TvFocusButton(opt.label, CardFocus) {
+                                    if (opt.group != null) {
+                                        val builder = exoPlayer.trackSelectionParameters.buildUpon()
+                                        builder.setOverrideForType(TrackSelectionOverride(opt.group.mediaTrackGroup, opt.trackIndex))
+                                        exoPlayer.trackSelectionParameters = builder.build()
+                                    }
+                                    showTrackDialog = false
+                                }
+                            }
+                        }
+                    }
+
+                    Text("Resolución / Calidad:", color = AccentCyan, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(videoOptions) { opt ->
+                            TvFocusButton(opt.label, CardFocus) {
+                                val builder = exoPlayer.trackSelectionParameters.buildUpon()
+                                if (opt.isOffOption) {
+                                    builder.clearOverridesOfType(C.TRACK_TYPE_VIDEO)
+                                } else if (opt.group != null) {
+                                    builder.setOverrideForType(TrackSelectionOverride(opt.group.mediaTrackGroup, opt.trackIndex))
+                                }
+                                exoPlayer.trackSelectionParameters = builder.build()
+                                showTrackDialog = false
+                            }
+                        }
+                    }
+
+                    TvFocusButton("Cerrar", AccentOrange) { showTrackDialog = false }
+                }
             }
         }
         return
     }
 
+    // INTERFAZ PRINCIPAL CON BANNER DEGRADADO AZUL -> MORADO -> FUCSIA
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(Color(0xFF0F172A), BgDeep)))
             .padding(horizontal = 24.dp, vertical = 14.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(Color(0xFF1E3A8A), Color(0xFF7C3AED), Color(0xFFEC4899))
+                    )
+                )
+                .padding(horizontal = 20.dp, vertical = 12.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Brush.horizontalGradient(listOf(AccentCyan, AccentPurple))),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.LiveTv, contentDescription = null, tint = Color.White)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.LiveTv, contentDescription = null, tint = Color.White, modifier = Modifier.size(30.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text("TV LIBRE", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, maxLines = 1, softWrap = false)
+                    Spacer(Modifier.width(12.dp))
+                    Text(statusText, color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp, maxLines = 1, softWrap = false)
                 }
-                Spacer(Modifier.width(10.dp))
-                Column {
-                    Text("TV LIBRE PLUS", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
-                    Text(statusText, color = AccentCyan, fontSize = 11.sp)
+
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TvBannerIcon(Icons.Default.Search, "Buscar") { showSearchBar = !showSearchBar }
+                    TvBannerIcon(Icons.Default.History, "Favoritos") { activeSection = "FAVORITOS" }
+                    TvBannerIcon(Icons.Default.PersonAdd, "Agregar Lista") { showSourceDialog = true }
+                    TvBannerIcon(Icons.Default.Refresh, "Actualizar") { scope.launch { reloadAllData() } }
+                    Text(
+                        clockText,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 19.sp,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.padding(start = 6.dp)
+                    )
                 }
             }
 
+            Spacer(Modifier.height(10.dp))
+
             val tabs = listOf(
                 "TV" to "TV",
-                "PARTIDOS" to "PARTIDOS (${matches.size})",
+                "PARTIDOS" to "P. HOY (${matches.size})",
                 "PELICULAS" to "PELÍCULAS",
                 "SERIES" to "SERIES",
-                "FAVORITOS" to "FAVORITOS"
+                "FAVORITOS" to "FAVORITOS",
+                "ADD_M3U" to "+ M3U",
+                "ADD_XTREAM" to "+ XTREAM"
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 tabs.forEach { (key, label) ->
+                    val isActionPill = key == "ADD_M3U" || key == "ADD_XTREAM"
                     val selected = activeSection == key
                     var focused by remember { mutableStateOf(false) }
                     Box(
@@ -298,36 +498,35 @@ fun TvLibreAndroidTvApp() {
                             .clip(RoundedCornerShape(50))
                             .background(
                                 when {
-                                    focused -> AccentCyan
-                                    selected -> CardFocus
-                                    else -> Color.Transparent
+                                    focused -> Color.White
+                                    selected -> Color.White.copy(alpha = 0.32f)
+                                    isActionPill -> Color.Black.copy(alpha = 0.28f)
+                                    else -> Color.White.copy(alpha = 0.14f)
                                 }
                             )
                             .border(
-                                width = if (selected || focused) 2.dp else 0.dp,
-                                color = if (focused) Color.White else AccentCyan,
+                                width = if (focused || selected) 1.5.dp else if (isActionPill) 1.dp else 0.dp,
+                                color = if (isActionPill && !focused) Color.White.copy(alpha = 0.55f) else Color.White,
                                 shape = RoundedCornerShape(50)
                             )
                             .onFocusChanged { focused = it.isFocused }
                             .focusable()
-                            .clickable { activeSection = key }
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .clickable {
+                                if (isActionPill) showSourceDialog = true
+                                else activeSection = key
+                            }
+                            .padding(horizontal = 14.dp, vertical = 7.dp)
                     ) {
                         Text(
                             label,
-                            color = if (focused) BgDeep else Color.White,
-                            fontWeight = if (selected || focused) FontWeight.Bold else FontWeight.Medium,
-                            fontSize = 14.sp
+                            color = if (focused) Color(0xFF1E3A8A) else Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                TvIconAction(Icons.Default.Search, "Buscar") { showSearchBar = !showSearchBar }
-                TvFocusButton("+ M3U / Xtream", AccentPurple) { showSourceDialog = true }
-                TvIconAction(Icons.Default.Refresh, "Actualizar") { scope.launch { reloadAllData() } }
-                Text(clockText, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
             }
         }
 
@@ -347,7 +546,7 @@ fun TvLibreAndroidTvApp() {
             )
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(12.dp))
 
         when (activeSection) {
             "TV" -> {
@@ -373,7 +572,7 @@ fun TvLibreAndroidTvApp() {
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clip(RoundedCornerShape(10.dp))
-                                        .background(if (focused) AccentCyan else if (isPlaying) CardFocus else Color(0xFF0E1525))
+                                        .background(if (focused) AccentCyan.copy(alpha = 0.25f) else if (isPlaying) CardFocus else Color(0xFF0E1525))
                                         .border(if (focused) 2.dp else 0.dp, Color.White, RoundedCornerShape(10.dp))
                                         .onFocusChanged { focused = it.isFocused }
                                         .focusable()
@@ -384,26 +583,10 @@ fun TvLibreAndroidTvApp() {
                                         .padding(horizontal = 12.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        "${idx + 1}",
-                                        color = if (focused) BgDeep else AccentCyan,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.width(34.dp)
-                                    )
+                                    Text("${idx + 1}", color = AccentCyan, fontWeight = FontWeight.Bold, modifier = Modifier.width(34.dp))
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            ch.title,
-                                            color = if (focused) BgDeep else Color.White,
-                                            fontWeight = FontWeight.SemiBold,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            ch.category,
-                                            color = if (focused) BgDeep.copy(alpha = 0.8f) else Color.Gray,
-                                            fontSize = 11.sp,
-                                            maxLines = 1
-                                        )
+                                        Text(ch.title, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text(ch.category, color = Color.Gray, fontSize = 11.sp, maxLines = 1)
                                     }
                                     if (ch.streamUrl in favoriteUrls) {
                                         Icon(Icons.Default.Favorite, null, tint = AccentOrange, modifier = Modifier.size(16.dp))
@@ -426,6 +609,7 @@ fun TvLibreAndroidTvApp() {
                                     PlayerView(ctx).apply {
                                         player = exoPlayer
                                         useController = false
+                                        isFocusable = false
                                     }
                                 },
                                 modifier = Modifier.fillMaxSize()
@@ -464,9 +648,7 @@ fun TvLibreAndroidTvApp() {
 
             "PARTIDOS" -> {
                 var selectedLeague by remember { mutableStateOf("Todos") }
-                val leagues = remember(matches) {
-                    listOf("Todos") + matches.map { it.league }.distinct()
-                }
+                val leagues = remember(matches) { listOf("Todos") + matches.map { it.league }.distinct() }
                 val filteredMatches = matches.filter {
                     (selectedLeague == "Todos" || it.league == selectedLeague) &&
                     (searchQuery.isBlank() || it.title.contains(searchQuery, true))
@@ -490,18 +672,14 @@ fun TvLibreAndroidTvApp() {
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(10.dp))
-                                    .background(if (focused) AccentCyan else if (active) AccentPurple else Color(0xFF0E1525))
+                                    .background(if (focused) AccentCyan.copy(alpha = 0.25f) else if (active) AccentPurple else Color(0xFF0E1525))
+                                    .border(if (focused) 2.dp else 0.dp, Color.White, RoundedCornerShape(10.dp))
                                     .onFocusChanged { focused = it.isFocused }
                                     .focusable()
                                     .clickable { selectedLeague = lg }
                                     .padding(12.dp)
                             ) {
-                                Text(
-                                    lg,
-                                    color = if (focused) BgDeep else Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
-                                )
+                                Text(lg, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             }
                         }
                     }
@@ -513,7 +691,7 @@ fun TvLibreAndroidTvApp() {
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    "No se detectaron partidos 'vs' en las listas actuales.\nAgrega tu lista IPTV M3U o Xtream en '+ M3U / Xtream'.",
+                                    "No se detectaron partidos 'vs' en las listas actuales.\nAgrega tu lista IPTV en '+ M3U' o '+ XTREAM'.",
                                     color = Color.LightGray,
                                     fontSize = 15.sp
                                 )
@@ -539,27 +717,12 @@ fun TvLibreAndroidTvApp() {
                                             Text(m.league, color = AccentCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                             Text("Toca OK para ver", color = Color.Gray, fontSize = 11.sp)
                                         }
-                                        Text(
-                                            m.teamA,
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 16.sp,
-                                            modifier = Modifier.weight(0.28f)
-                                        )
-                                        Column(
-                                            modifier = Modifier.weight(0.20f),
-                                            horizontalAlignment = Alignment.CenterHorizontally
-                                        ) {
+                                        Text(m.teamA, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(0.28f))
+                                        Column(modifier = Modifier.weight(0.20f), horizontalAlignment = Alignment.CenterHorizontally) {
                                             Text(m.timeLabel, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
                                             Text("EN DIRECTO", color = AccentOrange, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                         }
-                                        Text(
-                                            m.teamB,
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 16.sp,
-                                            modifier = Modifier.weight(0.28f)
-                                        )
+                                        Text(m.teamB, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(0.28f))
                                     }
                                 }
                             }
@@ -571,9 +734,7 @@ fun TvLibreAndroidTvApp() {
             "PELICULAS", "SERIES" -> {
                 val baseVod = if (activeSection == "PELICULAS") movies else series
                 var selectedGenre by remember { mutableStateOf("Todo") }
-                val genres = remember(baseVod) {
-                    listOf("Todo") + baseVod.map { it.category }.distinct().take(12)
-                }
+                val genres = remember(baseVod) { listOf("Todo") + baseVod.map { it.category }.distinct().take(12) }
                 val filteredVod = baseVod.filter {
                     (selectedGenre == "Todo" || it.category == selectedGenre) &&
                     (searchQuery.isBlank() || it.title.contains(searchQuery, true))
@@ -587,13 +748,14 @@ fun TvLibreAndroidTvApp() {
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(10.dp))
-                                    .background(if (focused) AccentCyan else if (active) AccentPurple else CardDark)
+                                    .background(if (focused) AccentCyan.copy(alpha = 0.25f) else if (active) AccentPurple else CardDark)
+                                    .border(if (focused) 2.dp else 0.dp, Color.White, RoundedCornerShape(10.dp))
                                     .onFocusChanged { focused = it.isFocused }
                                     .focusable()
                                     .clickable { selectedGenre = g }
                                     .padding(horizontal = 14.dp, vertical = 8.dp)
                             ) {
-                                Text(g, color = if (focused) BgDeep else Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text(g, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             }
                         }
                     }
@@ -605,10 +767,7 @@ fun TvLibreAndroidTvApp() {
                             modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)).background(CardDark),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                "No hay títulos en esta categoría todavía.\nConecta una lista Xtream Codes o M3U VOD arriba.",
-                                color = Color.LightGray
-                            )
+                            Text("No hay títulos aquí todavía.\nConecta tu lista en '+ M3U' o '+ XTREAM'.", color = Color.LightGray)
                         }
                     } else {
                         LazyVerticalGrid(
@@ -660,14 +819,7 @@ fun TvLibreAndroidTvApp() {
                                         }
                                     }
                                     Spacer(Modifier.height(8.dp))
-                                    Text(
-                                        item.title,
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                    Text(item.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                     Text(item.category, color = AccentCyan, fontSize = 11.sp, maxLines = 1)
                                 }
                             }
@@ -699,14 +851,15 @@ fun TvLibreAndroidTvApp() {
                                 Column(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(12.dp))
-                                        .background(if (focused) AccentCyan else CardDark)
+                                        .background(if (focused) AccentCyan.copy(alpha = 0.25f) else CardDark)
+                                        .border(if (focused) 2.dp else 0.dp, Color.White, RoundedCornerShape(12.dp))
                                         .onFocusChanged { focused = it.isFocused }
                                         .focusable()
                                         .clickable { playStream(ch.streamUrl, ch.title, true) }
                                         .padding(14.dp)
                                 ) {
-                                    Text(ch.title, color = if (focused) BgDeep else Color.White, fontWeight = FontWeight.Bold)
-                                    Text(ch.category, color = if (focused) BgDeep else AccentCyan, fontSize = 12.sp)
+                                    Text(ch.title, color = Color.White, fontWeight = FontWeight.Bold)
+                                    Text(ch.category, color = AccentCyan, fontSize = 12.sp)
                                 }
                             }
                         }
@@ -776,7 +929,7 @@ fun TvLibreAndroidTvApp() {
                     colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
                 )
                 Spacer(Modifier.height(12.dp))
-                Text("Opción 2: Servidor Xtream Codes (para Películas con Sinopsis y Partidos)", color = AccentCyan, fontSize = 13.sp)
+                Text("Opción 2: Servidor Xtream Codes (Películas con Sinopsis y Partidos)", color = AccentCyan, fontSize = 13.sp)
                 OutlinedTextField(
                     value = xHost,
                     onValueChange = { xHost = it },
@@ -837,36 +990,31 @@ fun TvFocusButton(text: String, baseColor: Color, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (focused) Color.White else baseColor)
-            .border(if (focused) 2.dp else 0.dp, AccentCyan, RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(50))
+            .background(if (focused) baseColor.copy(alpha = 0.95f) else baseColor.copy(alpha = 0.72f))
+            .border(if (focused) 2.dp else 1.dp, if (focused) AccentCyan else Color.White.copy(alpha = 0.22f), RoundedCornerShape(50))
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickable { onClick() }
-            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Text(
-            text,
-            color = if (focused) BgDeep else Color.White,
-            fontWeight = FontWeight.Bold,
-            fontSize = 13.sp
-        )
+        Text(text, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, softWrap = false)
     }
 }
 
 @Composable
-fun TvIconAction(icon: androidx.compose.ui.graphics.vector.ImageVector, desc: String, onClick: () -> Unit) {
+fun TvBannerIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, desc: String, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     Box(
         modifier = Modifier
-            .size(38.dp)
+            .size(36.dp)
             .clip(CircleShape)
-            .background(if (focused) AccentCyan else CardDark)
+            .background(if (focused) Color.White else Color.White.copy(alpha = 0.18f))
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, contentDescription = desc, tint = if (focused) BgDeep else Color.White, modifier = Modifier.size(20.dp))
+        Icon(icon, contentDescription = desc, tint = if (focused) Color(0xFF1E3A8A) else Color.White, modifier = Modifier.size(19.dp))
     }
 }
