@@ -665,21 +665,16 @@ fun TvLibreAndroidTvApp() {
         return
     }
 
-    // 2. INTERFAZ PRINCIPAL: BANNER DE BORDE A BORDE + PALETA PIZARRA ÍNDIGO PROFUNDO
+    // 2. INTERFAZ PRINCIPAL: BANNER DE BORDE A BORDE + LIENZO CONTINUO SIN CAJAS
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(BgIndigoDeep)
     ) {
-        // Banner superior edge-to-edge (sin márgenes ni forma de cápsula)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    Brush.horizontalGradient(
-                        listOf(Color(0xFF1E3A8A), AccentPurple, AccentPink)
-                    )
-                )
+                .background(Brush.horizontalGradient(listOf(Color(0xFF1E3A8A), AccentPurple, AccentPink)))
                 .padding(horizontal = 28.dp, vertical = 14.dp)
         ) {
             Row(
@@ -696,31 +691,16 @@ fun TvLibreAndroidTvApp() {
                     Spacer(Modifier.width(12.dp))
                     Text(statusText, color = Color.White.copy(alpha = 0.88f), fontSize = 12.sp, maxLines = 1, softWrap = false)
                 }
-
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     TvBannerIcon(Icons.Default.Search, "Buscar") { showSearchBar = !showSearchBar }
                     TvBannerIcon(Icons.Default.History, "Continuar viendo") { activeSection = "HISTORIAL" }
-                    TvBannerIcon(
-                        if (parentalPin.isNotEmpty()) Icons.Default.Lock else Icons.Default.LockOpen,
-                        "Control Parental PIN"
-                    ) { showPinSetupDialog = true }
+                    TvBannerIcon(if (parentalPin.isNotEmpty()) Icons.Default.Lock else Icons.Default.LockOpen, "Control Parental PIN") { showPinSetupDialog = true }
                     TvBannerIcon(Icons.Default.Person, "Perfil y Listas") { showSourceDialog = true }
                     TvBannerIcon(Icons.Default.Refresh, "Actualizar") { scope.launch { reloadAllData() } }
-                    Text(
-                        clockText,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 19.sp,
-                        maxLines = 1,
-                        softWrap = false,
-                        modifier = Modifier.padding(start = 6.dp)
-                    )
+                    Text(clockText, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 19.sp, maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 6.dp))
                 }
             }
-
             Spacer(Modifier.height(12.dp))
-
-            // 7 píldoras: TV | PARTIDOS DE HOY | DEPORTES | PELÍCULAS | SERIES | FAVORITOS | + M3U / XTREAM
             val tabs = listOf(
                 "TV" to "TV",
                 "PARTIDOS" to "PARTIDOS DE HOY (${matches.size})",
@@ -738,80 +718,41 @@ fun TvLibreAndroidTvApp() {
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(50))
-                            .background(
-                                when {
-                                    focused -> Color.White
-                                    selected -> Color.White.copy(alpha = 0.34f)
-                                    isActionPill -> Color.Black.copy(alpha = 0.28f)
-                                    else -> Color.White.copy(alpha = 0.16f)
-                                }
-                            )
-                            .border(
-                                width = if (focused || selected) 1.5.dp else if (isActionPill) 1.dp else 0.dp,
-                                color = if (isActionPill && !focused) Color.White.copy(alpha = 0.55f) else Color.White,
-                                shape = RoundedCornerShape(50)
-                            )
+                            .background(when {
+                                focused -> Color.White
+                                selected -> Color.White.copy(alpha = 0.34f)
+                                isActionPill -> Color.Black.copy(alpha = 0.28f)
+                                else -> Color.White.copy(alpha = 0.16f)
+                            })
+                            .border(if (focused || selected) 1.5.dp else if (isActionPill) 1.dp else 0.dp, if (isActionPill && !focused) Color.White.copy(alpha = 0.55f) else Color.White, RoundedCornerShape(50))
                             .onFocusChanged { focused = it.isFocused }
                             .focusable()
-                            .clickable {
-                                if (isActionPill) showSourceDialog = true
-                                else activeSection = key
-                            }
+                            .clickable { if (isActionPill) showSourceDialog = true else activeSection = key }
                             .padding(horizontal = 14.dp, vertical = 7.dp)
                     ) {
-                        Text(
-                            label,
-                            color = if (focused) Color(0xFF1E3A8A) else Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            softWrap = false
-                        )
+                        Text(label, color = if (focused) Color(0xFF1E3A8A) else Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, softWrap = false)
                     }
                 }
             }
         }
-
-        // Contenido inferior continuo de borde a borde (sin cajas encerradas)
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(BgIndigoDeep)
-        ) {
+        Column(modifier = Modifier.fillMaxSize().background(BgIndigoDeep)) {
             if (showSearchBar) {
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
                     placeholder = { Text("Buscar canal, partido, deporte, película o serie...", color = Color.Gray) },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = AccentCyan
-                    )
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = AccentCyan)
                 )
             }
-
             when (activeSection) {
                 "TV", "DEPORTES" -> {
-                    val baseList = if (activeSection == "DEPORTES") {
-                        channels.filter { isSportsChannel(it.title, it.category) }
-                    } else {
-                        channels
-                    }
-                    val filteredCh = baseList.filter {
-                        searchQuery.isBlank() || it.title.contains(searchQuery, true) || it.category.contains(searchQuery, true)
-                    }
+                    val baseList = if (activeSection == "DEPORTES") channels.filter { isSportsChannel(it.title, it.category) } else channels
+                    val filteredCh = baseList.filter { searchQuery.isBlank() || it.title.contains(searchQuery, true) || it.category.contains(searchQuery, true) }
                     val sectionLabel = if (activeSection == "DEPORTES") "Canales de Deportes (${filteredCh.size})" else "Lista de canales (${filteredCh.size})"
-
                     Row(modifier = Modifier.fillMaxSize()) {
-                        Column(
-                            modifier = Modifier
-                                .weight(0.36f)
-                                .fillMaxHeight()
-                                .padding(start = 20.dp, end = 12.dp, top = 12.dp, bottom = 10.dp)
-                        ) {
+                        Column(modifier = Modifier.weight(0.36f).fillMaxHeight().padding(start = 20.dp, end = 12.dp, top = 12.dp, bottom = 10.dp)) {
                             Text(sectionLabel, color = AccentCyan, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.padding(horizontal = 8.dp))
                             Spacer(Modifier.height(8.dp))
                             LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -823,20 +764,17 @@ fun TvLibreAndroidTvApp() {
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(10.dp))
-                                            .background(
-                                                when {
-                                                    focused -> Brush.horizontalGradient(listOf(AccentPurple.copy(alpha = 0.72f), AccentCyan.copy(alpha = 0.50f)))
-                                                    isPlaying -> Brush.horizontalGradient(listOf(PanelSlate, PanelSlate))
-                                                    else -> Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
-                                                }
-                                            )
+                                            .background(when {
+                                                focused -> Brush.horizontalGradient(listOf(AccentPurple.copy(alpha = 0.72f), AccentCyan.copy(alpha = 0.50f)))
+                                                isPlaying -> Brush.horizontalGradient(listOf(PanelSlate, PanelSlate))
+                                                else -> Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
+                                            })
                                             .border(if (focused) 1.5.dp else 0.dp, Color.White, RoundedCornerShape(10.dp))
                                             .onFocusChanged { focused = it.isFocused }
                                             .focusable()
                                             .clickable {
                                                 executeProtected(ch.title, ch.category) {
-                                                    if (isPlaying) isFullscreen = true
-                                                    else playStream(ch.streamUrl, ch.title, false, false)
+                                                    if (isPlaying) isFullscreen = true else playStream(ch.streamUrl, ch.title, false, false)
                                                 }
                                             }
                                             .padding(horizontal = 10.dp, vertical = 9.dp),
@@ -846,143 +784,68 @@ fun TvLibreAndroidTvApp() {
                                         ChannelLogoBadge(ch.title, ch.logoUrl)
                                         Spacer(Modifier.width(10.dp))
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                if (locked) "🔒 ${ch.title}" else ch.title,
-                                                color = Color.White,
-                                                fontWeight = FontWeight.SemiBold,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
+                                            Text(if (locked) "🔒 ${ch.title}" else ch.title, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                             Text(ch.category, color = Color.LightGray.copy(alpha = 0.65f), fontSize = 11.sp, maxLines = 1)
                                         }
-                                        if (ch.streamUrl in favoriteUrls) {
-                                            Icon(Icons.Default.Favorite, null, tint = AccentPink, modifier = Modifier.size(16.dp))
-                                        }
+                                        if (ch.streamUrl in favoriteUrls) Icon(Icons.Default.Favorite, null, tint = AccentPink, modifier = Modifier.size(16.dp))
                                     }
                                 }
                             }
                         }
-
-                        Box(
-                            modifier = Modifier
-                                .width(1.dp)
-                                .fillMaxHeight()
-                                .background(Color.White.copy(alpha = 0.08f))
-                        )
-
-                        Column(
-                            modifier = Modifier
-                                .weight(0.64f)
-                                .fillMaxHeight()
-                        ) {
+                        Box(modifier = Modifier.width(1.dp).fillMaxHeight().background(Color.White.copy(alpha = 0.08f)))
+                        Column(modifier = Modifier.weight(0.64f).fillMaxHeight()) {
                             Box(modifier = Modifier.weight(1f).fillMaxWidth().background(Color.Black)) {
                                 AndroidView(
-                                    factory = { ctx ->
-                                        PlayerView(ctx).apply {
-                                            player = exoPlayer
-                                            useController = false
-                                            isFocusable = false
-                                            isFocusableInTouchMode = false
-                                        }
-                                    },
+                                    factory = { ctx -> PlayerView(ctx).apply { player = exoPlayer; useController = false; isFocusable = false; isFocusableInTouchMode = false } },
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(BgIndigoDeep)
-                                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                                modifier = Modifier.fillMaxWidth().background(BgIndigoDeep).padding(horizontal = 20.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text(
-                                    currentStreamTitle,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f)
-                                )
+                                Text(currentStreamTitle, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    if (currentStreamUrl.isNotEmpty()) {
-                                        TvFocusButton(
-                                            if (currentStreamUrl in favoriteUrls) "Quitar Fav" else "+ Favorito",
-                                            PanelSlate
-                                        ) { toggleFavorite(currentStreamUrl) }
-                                    }
+                                    if (currentStreamUrl.isNotEmpty()) TvFocusButton(if (currentStreamUrl in favoriteUrls) "Quitar Fav" else "+ Favorito", PanelSlate) { toggleFavorite(currentStreamUrl) }
                                     TvFocusButton("Pantalla Completa", AccentOrange) { isFullscreen = true }
                                 }
                             }
                         }
                     }
                 }
-
                 "PARTIDOS" -> {
                     var selectedLeague by remember { mutableStateOf("Todos") }
                     val leagues = remember(matches) { listOf("Todos") + matches.map { it.league }.distinct() }
-                    val filteredMatches = matches.filter {
-                        (selectedLeague == "Todos" || it.league == selectedLeague) &&
-                        (searchQuery.isBlank() || it.title.contains(searchQuery, true))
-                    }
-
-                    Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                        Column(
-                            modifier = Modifier
-                                .weight(0.26f)
-                                .fillMaxHeight()
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(PanelSlate)
-                                .border(1.dp, AccentPurple.copy(alpha = 0.25f), RoundedCornerShape(14.dp))
-                                .padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
+                    val filteredMatches = matches.filter { (selectedLeague == "Todos" || it.league == selectedLeague) && (searchQuery.isBlank() || it.title.contains(searchQuery, true)) }
+                    Row(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                        Column(modifier = Modifier.weight(0.26f).fillMaxHeight().clip(RoundedCornerShape(14.dp)).background(PanelSlate).border(1.dp, AccentPurple.copy(alpha = 0.25f), RoundedCornerShape(14.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("Partidos de Hoy", color = AccentCyan, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                             leagues.forEach { lg ->
                                 var focused by remember { mutableStateOf(false) }
                                 val active = selectedLeague == lg
                                 Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
+                                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
                                         .background(if (focused) AccentCyan.copy(alpha = 0.25f) else if (active) AccentPurple else Color(0xFF0E1428))
                                         .border(if (focused) 1.5.dp else 0.dp, Color.White, RoundedCornerShape(10.dp))
-                                        .onFocusChanged { focused = it.isFocused }
-                                        .focusable()
-                                        .clickable { selectedLeague = lg }
-                                        .padding(12.dp)
-                                ) {
-                                    Text(lg, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                }
+                                        .onFocusChanged { focused = it.isFocused }.focusable().clickable { selectedLeague = lg }.padding(12.dp)
+                                ) { Text(lg, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
                             }
                         }
-
                         Column(modifier = Modifier.weight(0.74f).fillMaxHeight()) {
                             if (filteredMatches.isEmpty()) {
-                                Box(
-                                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)).background(PanelSlate),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        "No se detectaron partidos 'vs' en las listas actuales.\nAgrega tu lista IPTV en '+ M3U / XTREAM'.",
-                                        color = Color.LightGray,
-                                        fontSize = 15.sp
-                                    )
+                                Box(modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)).background(PanelSlate), contentAlignment = Alignment.Center) {
+                                    Text("No se detectaron partidos 'vs' en las listas actuales.\nAgrega tu lista IPTV en '+ M3U / XTREAM'.", color = Color.LightGray, fontSize = 15.sp)
                                 }
                             } else {
                                 LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                     items(filteredMatches) { m ->
                                         var focused by remember { mutableStateOf(false) }
                                         Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clip(RoundedCornerShape(12.dp))
+                                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
                                                 .background(if (focused) CardFocus else PanelSlate)
                                                 .border(if (focused) 2.dp else 1.dp, if (focused) AccentCyan else AccentPurple.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
-                                                .onFocusChanged { focused = it.isFocused }
-                                                .focusable()
-                                                .clickable { playStream(m.streamUrl, m.title, true, false) }
+                                                .onFocusChanged { focused = it.isFocused }.focusable().clickable { playStream(m.streamUrl, m.title, true, false) }
                                                 .padding(horizontal = 18.dp, vertical = 14.dp),
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.SpaceBetween
@@ -1004,117 +867,60 @@ fun TvLibreAndroidTvApp() {
                         }
                     }
                 }
-
-                    }
-                }
-
                 "PELICULAS", "SERIES" -> {
                     val baseVod = if (activeSection == "PELICULAS") movies else series
                     var selectedGenre by remember { mutableStateOf("Todo") }
                     val genres = remember(baseVod) { listOf("Todo") + baseVod.map { it.category }.distinct().take(12) }
-                    val filteredVod = baseVod.filter {
-                        (selectedGenre == "Todo" || it.category == selectedGenre) &&
-                        (searchQuery.isBlank() || it.title.contains(searchQuery, true))
-                    }
-
-                    Column(modifier = Modifier.fillMaxSize()) {
+                    val filteredVod = baseVod.filter { (selectedGenre == "Todo" || it.category == selectedGenre) && (searchQuery.isBlank() || it.title.contains(searchQuery, true)) }
+                    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 14.dp)) {
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(genres) { g ->
                                 var focused by remember { mutableStateOf(false) }
                                 val active = selectedGenre == g
                                 Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(10.dp))
+                                    modifier = Modifier.clip(RoundedCornerShape(10.dp))
                                         .background(if (focused) AccentCyan.copy(alpha = 0.25f) else if (active) AccentPurple else PanelSlate)
                                         .border(if (focused) 1.5.dp else 0.dp, Color.White, RoundedCornerShape(10.dp))
-                                        .onFocusChanged { focused = it.isFocused }
-                                        .focusable()
-                                        .clickable { selectedGenre = g }
-                                        .padding(horizontal = 14.dp, vertical = 8.dp)
-                                ) {
-                                    Text(g, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                }
+                                        .onFocusChanged { focused = it.isFocused }.focusable().clickable { selectedGenre = g }.padding(horizontal = 14.dp, vertical = 8.dp)
+                                ) { Text(g, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
                             }
                         }
-
                         Spacer(Modifier.height(12.dp))
-
                         if (filteredVod.isEmpty()) {
-                            Box(
-                                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)).background(PanelSlate),
-                                contentAlignment = Alignment.Center
-                            ) {
+                            Box(modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)).background(PanelSlate), contentAlignment = Alignment.Center) {
                                 Text("No hay títulos aquí todavía.\nConecta tu lista en '+ M3U / XTREAM'.", color = Color.LightGray)
                             }
                         } else {
-                            LazyVerticalGrid(
-                                columns = GridCells.Fixed(5),
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
+                            LazyVerticalGrid(columns = GridCells.Fixed(5), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 items(filteredVod) { item ->
                                     var focused by remember { mutableStateOf(false) }
                                     val locked = parentalPin.isNotEmpty() && isAdultContent(item.title, item.category)
                                     Column(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp))
+                                        modifier = Modifier.clip(RoundedCornerShape(12.dp))
                                             .background(if (focused) CardFocus else PanelSlate)
                                             .border(if (focused) 2.dp else 1.dp, if (focused) AccentCyan else AccentPurple.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
-                                            .onFocusChanged { focused = it.isFocused }
-                                            .focusable()
+                                            .onFocusChanged { focused = it.isFocused }.focusable()
                                             .clickable {
                                                 executeProtected(item.title, item.category) {
                                                     selectedVodDetail = item
                                                     detailedPlot = item.plot
-                                                    scope.launch(Dispatchers.IO) {
-                                                        val full = fetchVodPlotXtream(item)
-                                                        withContext(Dispatchers.Main) { detailedPlot = full }
-                                                    }
+                                                    scope.launch(Dispatchers.IO) { val full = fetchVodPlotXtream(item); withContext(Dispatchers.Main) { detailedPlot = full } }
                                                 }
-                                            }
-                                            .padding(10.dp)
+                                            }.padding(10.dp)
                                     ) {
                                         Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(145.dp)
-                                                .clip(RoundedCornerShape(8.dp))
+                                            modifier = Modifier.fillMaxWidth().height(145.dp).clip(RoundedCornerShape(8.dp))
                                                 .background(Brush.verticalGradient(listOf(AccentPurple.copy(alpha = 0.45f), Color(0xFF0E1428)))),
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            Icon(
-                                                if (locked) Icons.Default.Lock else if (item.isSeries) Icons.Default.VideoLibrary else Icons.Default.Movie,
-                                                contentDescription = null,
-                                                tint = if (locked) AccentPink else AccentCyan,
-                                                modifier = Modifier.size(44.dp)
-                                            )
+                                            Icon(if (locked) Icons.Default.Lock else if (item.isSeries) Icons.Default.VideoLibrary else Icons.Default.Movie, null, tint = if (locked) AccentPink else AccentCyan, modifier = Modifier.size(44.dp))
                                             if (!locked && item.posterUrl.startsWith("http")) {
-                                                AsyncImage(
-                                                    model = item.posterUrl,
-                                                    contentDescription = item.title,
-                                                    contentScale = ContentScale.Crop,
-                                                    modifier = Modifier.fillMaxSize()
-                                                )
+                                                AsyncImage(model = item.posterUrl, contentDescription = item.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                                             }
-                                            if (item.rating.isNotEmpty()) {
-                                                Text(
-                                                    "★ ${item.rating}",
-                                                    color = Color.Yellow,
-                                                    fontSize = 11.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)
-                                                )
-                                            }
+                                            if (item.rating.isNotEmpty()) Text("★ ${item.rating}", color = Color.Yellow, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
                                         }
                                         Spacer(Modifier.height(8.dp))
-                                        Text(
-                                            if (locked) "🔒 ${item.title}" else item.title,
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 13.sp,
-                                            maxLines = 2,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
+                                        Text(if (locked) "🔒 ${item.title}" else item.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                         Text(item.category, color = AccentCyan, fontSize = 11.sp, maxLines = 1)
                                     }
                                 }
@@ -1122,42 +928,24 @@ fun TvLibreAndroidTvApp() {
                         }
                     }
                 }
-
-                    }
-                }
-
                 "HISTORIAL" -> {
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        Text("Continuar viendo / Historial (${historyList.size})", color = AccentCyan, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 14.dp)) {
+                        Text("Continuar viendo Películas y Series (${historyList.size})", color = AccentCyan, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                         Spacer(Modifier.height(12.dp))
                         if (historyList.isEmpty()) {
-                            Box(
-                                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)).background(PanelSlate),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("Aquí aparecerán los canales, películas y series que hayas visto recientemente.", color = Color.LightGray)
+                            Box(modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)).background(PanelSlate), contentAlignment = Alignment.Center) {
+                                Text("Aquí aparecerán únicamente las películas y series que hayas visto recientemente.", color = Color.LightGray)
                             }
                         } else {
-                            LazyVerticalGrid(
-                                columns = GridCells.Fixed(4),
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
+                            LazyVerticalGrid(columns = GridCells.Fixed(4), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 items(historyList) { item ->
                                     var focused by remember { mutableStateOf(false) }
-                                    val isVodItem = item.category.contains("Película", true)
                                     Column(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp))
+                                        modifier = Modifier.clip(RoundedCornerShape(12.dp))
                                             .background(if (focused) AccentCyan.copy(alpha = 0.25f) else PanelSlate)
                                             .border(if (focused) 2.dp else 1.dp, if (focused) Color.White else AccentPurple.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
-                                            .onFocusChanged { focused = it.isFocused }
-                                            .focusable()
-                                            .clickable {
-                                                executeProtected(item.title, item.category) {
-                                                    playStream(item.streamUrl, item.title, true, isVodItem)
-                                                }
-                                            }
+                                            .onFocusChanged { focused = it.isFocused }.focusable()
+                                            .clickable { executeProtected(item.title, item.category) { playStream(item.streamUrl, item.title, true, true) } }
                                             .padding(14.dp)
                                     ) {
                                         Text(item.title, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -1168,42 +956,25 @@ fun TvLibreAndroidTvApp() {
                         }
                     }
                 }
-
-                    }
-                }
-
                 "FAVORITOS" -> {
                     val favChannels = channels.filter { it.streamUrl in favoriteUrls }
-                    Column(modifier = Modifier.fillMaxSize()) {
+                    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 14.dp)) {
                         Text("Mis Canales Favoritos (${favChannels.size})", color = AccentCyan, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                         Spacer(Modifier.height(12.dp))
                         if (favChannels.isEmpty()) {
-                            Box(
-                                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)).background(PanelSlate),
-                                contentAlignment = Alignment.Center
-                            ) {
+                            Box(modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)).background(PanelSlate), contentAlignment = Alignment.Center) {
                                 Text("Aún no tienes favoritos. En la pestaña TV pulsa '+ Favorito'.", color = Color.LightGray)
                             }
                         } else {
-                            LazyVerticalGrid(
-                                columns = GridCells.Fixed(4),
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
+                            LazyVerticalGrid(columns = GridCells.Fixed(4), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 items(favChannels) { ch ->
                                     var focused by remember { mutableStateOf(false) }
                                     Column(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp))
+                                        modifier = Modifier.clip(RoundedCornerShape(12.dp))
                                             .background(if (focused) AccentCyan.copy(alpha = 0.25f) else PanelSlate)
                                             .border(if (focused) 2.dp else 1.dp, if (focused) Color.White else AccentPurple.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
-                                            .onFocusChanged { focused = it.isFocused }
-                                            .focusable()
-                                            .clickable {
-                                                executeProtected(ch.title, ch.category) {
-                                                    playStream(ch.streamUrl, ch.title, true, false)
-                                                }
-                                            }
+                                            .onFocusChanged { focused = it.isFocused }.focusable()
+                                            .clickable { executeProtected(ch.title, ch.category) { playStream(ch.streamUrl, ch.title, true, false) } }
                                             .padding(14.dp)
                                     ) {
                                         Text(ch.title, color = Color.White, fontWeight = FontWeight.Bold)
@@ -1211,25 +982,15 @@ fun TvLibreAndroidTvApp() {
                                     }
                                 }
                             }
-                        
-                    
-                
-                    
-            
-        
-    
-
-    // 3. DIÁLOGO DE SINOPSIS VOD (PELÍCULAS / SERIES)
+                        }
+                    }
+                }
+            }
+        }
+    }
     selectedVodDetail?.let { vod ->
         Dialog(onDismissRequest = { selectedVodDetail = null }) {
-            Column(
-                modifier = Modifier
-                    .width(560.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(PanelSlate)
-                    .border(2.dp, AccentCyan, RoundedCornerShape(16.dp))
-                    .padding(24.dp)
-            ) {
+            Column(modifier = Modifier.width(560.dp).clip(RoundedCornerShape(16.dp)).background(PanelSlate).border(2.dp, AccentCyan, RoundedCornerShape(16.dp)).padding(24.dp)) {
                 Text(vod.title, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 22.sp)
                 Spacer(Modifier.height(4.dp))
                 Text("${vod.category} ${if (vod.year.isNotEmpty()) "• ${vod.year}" else ""}", color = AccentCyan, fontSize = 13.sp)
@@ -1241,10 +1002,7 @@ fun TvLibreAndroidTvApp() {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (vod.streamUrl.isNotEmpty()) {
                         TvFocusButton("▶ Reproducir Ahora", AccentOrange) {
-                            val u = vod.streamUrl
-                            val t = vod.title
-                            selectedVodDetail = null
-                            playStream(u, t, true, true)
+                            val u = vod.streamUrl; val t = vod.title; selectedVodDetail = null; playStream(u, t, true, true)
                         }
                     }
                     TvFocusButton("Cerrar", CardFocus) { selectedVodDetail = null }
@@ -1253,182 +1011,76 @@ fun TvLibreAndroidTvApp() {
         }
     }
 
-    // 4. DIÁLOGO CONFIGURAR / QUITAR PIN DE CONTROL PARENTAL
     if (showPinSetupDialog) {
         var newPin by remember { mutableStateOf("") }
         Dialog(onDismissRequest = { showPinSetupDialog = false }) {
-            Column(
-                modifier = Modifier
-                    .width(460.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(PanelSlate)
-                    .border(2.dp, AccentPink, RoundedCornerShape(16.dp))
-                    .padding(22.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            Column(modifier = Modifier.width(460.dp).clip(RoundedCornerShape(16.dp)).background(PanelSlate).border(2.dp, AccentPink, RoundedCornerShape(16.dp)).padding(22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Control Parental (PIN +18)", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 19.sp)
-                Text(
-                    if (parentalPin.isEmpty()) "Protege canales y películas para adultos (+18 / XXX) con una clave de 4 dígitos."
-                    else "El bloqueo parental está ACTIVO. Ingresa una nueva clave de 4 dígitos o desactívalo.",
-                    color = Color.LightGray,
-                    fontSize = 13.sp
-                )
-                OutlinedTextField(
-                    value = newPin,
-                    onValueChange = { if (it.length <= 4 && it.all { c -> c.isDigit() }) newPin = it },
-                    placeholder = { Text("Ej. 1234", color = Color.Gray) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
-                )
+                Text(if (parentalPin.isEmpty()) "Protege canales y películas para adultos (+18 / XXX) con una clave de 4 dígitos." else "El bloqueo parental está ACTIVO. Ingresa una nueva clave de 4 dígitos o desactívalo.", color = Color.LightGray, fontSize = 13.sp)
+                OutlinedTextField(value = newPin, onValueChange = { if (it.length <= 4 && it.all { c -> c.isDigit() }) newPin = it }, placeholder = { Text("Ej. 1234", color = Color.Gray) }, singleLine = true, modifier = Modifier.fillMaxWidth(), colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    TvFocusButton("Guardar PIN", AccentCyan) {
-                        if (newPin.length == 4) {
-                            parentalPin = newPin
-                            prefs.edit().putString("parental_pin", newPin).apply()
-                            showPinSetupDialog = false
-                        }
-                    }
-                    if (parentalPin.isNotEmpty()) {
-                        TvFocusButton("Desactivar PIN", AccentOrange) {
-                            parentalPin = ""
-                            prefs.edit().remove("parental_pin").apply()
-                            showPinSetupDialog = false
-                        }
-                    }
+                    TvFocusButton("Guardar PIN", AccentCyan) { if (newPin.length == 4) { parentalPin = newPin; prefs.edit().putString("parental_pin", newPin).apply(); showPinSetupDialog = false } }
+                    if (parentalPin.isNotEmpty()) TvFocusButton("Desactivar PIN", AccentOrange) { parentalPin = ""; prefs.edit().remove("parental_pin").apply(); showPinSetupDialog = false }
                     TvFocusButton("Cerrar", CardFocus) { showPinSetupDialog = false }
                 }
             }
         }
     }
 
-    // 5. DIÁLOGO DESBLOQUEO CON PIN AL ABRIR CONTENIDO ADULTO
     pendingLockedAction?.let { unlockAction ->
         var enteredPin by remember { mutableStateOf("") }
         var pinError by remember { mutableStateOf(false) }
         Dialog(onDismissRequest = { pendingLockedAction = null }) {
-            Column(
-                modifier = Modifier
-                    .width(420.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(PanelSlate)
-                    .border(2.dp, AccentPink, RoundedCornerShape(16.dp))
-                    .padding(22.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            Column(modifier = Modifier.width(420.dp).clip(RoundedCornerShape(16.dp)).background(PanelSlate).border(2.dp, AccentPink, RoundedCornerShape(16.dp)).padding(22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("🔒 Contenido Restringido (+18)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 Text("Ingresa tu PIN de 4 dígitos para desbloquear:", color = Color.LightGray, fontSize = 13.sp)
                 OutlinedTextField(
                     value = enteredPin,
-                    onValueChange = {
-                        if (it.length <= 4 && it.all { c -> c.isDigit() }) {
-                            enteredPin = it
-                            pinError = false
-                            if (it == parentalPin) {
-                                pendingLockedAction = null
-                                unlockAction()
-                            }
-                        }
-                    },
-                    placeholder = { Text("••••", color = Color.Gray) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                    onValueChange = { if (it.length <= 4 && it.all { c -> c.isDigit() }) { enteredPin = it; pinError = false; if (it == parentalPin) { pendingLockedAction = null; unlockAction() } } },
+                    placeholder = { Text("••••", color = Color.Gray) }, singleLine = true, modifier = Modifier.fillMaxWidth(), colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
                 )
-                if (pinError) {
-                    Text("PIN incorrecto, intenta nuevamente.", color = AccentOrange, fontSize = 12.sp)
-                }
+                if (pinError) Text("PIN incorrecto, intenta nuevamente.", color = AccentOrange, fontSize = 12.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    TvFocusButton("Desbloquear", AccentCyan) {
-                        if (enteredPin == parentalPin) {
-                            pendingLockedAction = null
-                            unlockAction()
-                        } else {
-                            pinError = true
-                        }
-                    }
+                    TvFocusButton("Desbloquear", AccentCyan) { if (enteredPin == parentalPin) { pendingLockedAction = null; unlockAction() } else pinError = true }
                     TvFocusButton("Cancelar", CardFocus) { pendingLockedAction = null }
                 }
             }
         }
     }
 
-    // 6. DIÁLOGO LISTAS M3U / XTREAM CODES
     if (showSourceDialog) {
         var inputUrl by remember { mutableStateOf("") }
         var xHost by remember { mutableStateOf("") }
         var xUser by remember { mutableStateOf("") }
         var xPass by remember { mutableStateOf("") }
-
         Dialog(onDismissRequest = { showSourceDialog = false }) {
-            Column(
-                modifier = Modifier
-                    .width(560.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(PanelSlate)
-                    .border(2.dp, AccentPurple, RoundedCornerShape(16.dp))
-                    .padding(22.dp)
-            ) {
+            Column(modifier = Modifier.width(560.dp).clip(RoundedCornerShape(16.dp)).background(PanelSlate).border(2.dp, AccentPurple, RoundedCornerShape(16.dp)).padding(22.dp)) {
                 Text("Agregar Lista M3U o Cuenta Xtream Codes", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 Spacer(Modifier.height(10.dp))
                 Text("Opción 1: Enlace M3U / M3U8 (HTTP o HTTPS)", color = AccentCyan, fontSize = 13.sp)
-                OutlinedTextField(
-                    value = inputUrl,
-                    onValueChange = { inputUrl = it },
-                    placeholder = { Text("http://... o https://.../lista.m3u", color = Color.Gray) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
-                )
+                OutlinedTextField(value = inputUrl, onValueChange = { inputUrl = it }, placeholder = { Text("http://... o https://.../lista.m3u", color = Color.Gray) }, singleLine = true, modifier = Modifier.fillMaxWidth(), colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White))
                 Spacer(Modifier.height(12.dp))
                 Text("Opción 2: Servidor Xtream Codes (Películas con Sinopsis y Partidos)", color = AccentCyan, fontSize = 13.sp)
-                OutlinedTextField(
-                    value = xHost,
-                    onValueChange = { xHost = it },
-                    placeholder = { Text("Servidor (ej. http://iptv.servidor.com:8080)", color = Color.Gray) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
-                )
+                OutlinedTextField(value = xHost, onValueChange = { xHost = it }, placeholder = { Text("Servidor (ej. http://iptv.servidor.com:8080)", color = Color.Gray) }, singleLine = true, modifier = Modifier.fillMaxWidth(), colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White))
                 Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = xUser,
-                        onValueChange = { xUser = it },
-                        placeholder = { Text("Usuario", color = Color.Gray) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
-                    )
-                    OutlinedTextField(
-                        value = xPass,
-                        onValueChange = { xPass = it },
-                        placeholder = { Text("Contraseña", color = Color.Gray) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
-                    )
+                    OutlinedTextField(value = xUser, onValueChange = { xUser = it }, placeholder = { Text("Usuario", color = Color.Gray) }, singleLine = true, modifier = Modifier.weight(1f), colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White))
+                    OutlinedTextField(value = xPass, onValueChange = { xPass = it }, placeholder = { Text("Contraseña", color = Color.Gray) }, singleLine = true, modifier = Modifier.weight(1f), colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White))
                 }
                 Spacer(Modifier.height(16.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     TvFocusButton("Guardar y Cargar", AccentCyan) {
                         val nextList = savedSources.toMutableList()
                         if (inputUrl.isNotBlank()) nextList.add(inputUrl.trim())
-                        if (xHost.isNotBlank() && xUser.isNotBlank() && xPass.isNotBlank()) {
-                            nextList.add("${xHost.trim()}|${xUser.trim()}|${xPass.trim()}")
-                        }
+                        if (xHost.isNotBlank() && xUser.isNotBlank() && xPass.isNotBlank()) nextList.add("${xHost.trim()}|${xUser.trim()}|${xPass.trim()}")
                         savedSources = nextList
-                        val arr = JSONArray()
-                        nextList.forEach { arr.put(it) }
+                        val arr = JSONArray(); nextList.forEach { arr.put(it) }
                         prefs.edit().putString("sources_json", arr.toString()).apply()
                         showSourceDialog = false
                         scope.launch { reloadAllData(nextList) }
                     }
                     TvFocusButton("Borrar listas", AccentOrange) {
-                        savedSources = emptyList()
-                        prefs.edit().putString("sources_json", "[]").apply()
-                        showSourceDialog = false
-                        scope.launch { reloadAllData(emptyList()) }
+                        savedSources = emptyList(); prefs.edit().putString("sources_json", "[]").apply(); showSourceDialog = false; scope.launch { reloadAllData(emptyList()) }
                     }
                     TvFocusButton("Cerrar", CardFocus) { showSourceDialog = false }
                 }
@@ -1441,42 +1093,25 @@ fun TvLibreAndroidTvApp() {
 fun TvFocusButton(text: String, baseColor: Color, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
+        modifier = Modifier.clip(RoundedCornerShape(50))
             .background(if (focused) baseColor.copy(alpha = 0.95f) else baseColor.copy(alpha = 0.72f))
             .border(if (focused) 2.dp else 1.dp, if (focused) AccentCyan else Color.White.copy(alpha = 0.22f), RoundedCornerShape(50))
-            .onFocusChanged { focused = it.isFocused }
-            .focusable()
-            .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        Text(text, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, softWrap = false)
-    }
+            .onFocusChanged { focused = it.isFocused }.focusable().clickable { onClick() }.padding(horizontal = 16.dp, vertical = 8.dp)
+    ) { Text(text, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, softWrap = false) }
 }
 
 @Composable
 fun TvBannerIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, desc: String, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     Box(
-        modifier = Modifier
-            .size(36.dp)
-            .clip(CircleShape)
-            .background(if (focused) Color.White else Color.White.copy(alpha = 0.18f))
-            .onFocusChanged { focused = it.isFocused }
-            .focusable()
-            .clickable { onClick() },
+        modifier = Modifier.size(36.dp).clip(CircleShape).background(if (focused) Color.White else Color.White.copy(alpha = 0.18f))
+            .onFocusChanged { focused = it.isFocused }.focusable().clickable { onClick() },
         contentAlignment = Alignment.Center
-    ) {
-        Icon(icon, contentDescription = desc, tint = if (focused) Color(0xFF1E3A8A) else Color.White, modifier = Modifier.size(19.dp))
-    }
+    ) { Icon(icon, contentDescription = desc, tint = if (focused) Color(0xFF1E3A8A) else Color.White, modifier = Modifier.size(19.dp)) }
 }
 
 fun formatDurationMs(ms: Long): String {
     if (ms <= 0L) return "00:00"
-    val totalSec = ms / 1000L
-    val h = totalSec / 3600L
-    val m = (totalSec % 3600L) / 60L
-    val s = totalSec % 60L
-    return if (h > 0L) String.format(Locale.getDefault(), "%02d:%02d:%02d", h, m, s)
-    else String.format(Locale.getDefault(), "%02d:%02d", m, s)
+    val totalSec = ms / 1000L; val h = totalSec / 3600L; val m = (totalSec % 3600L) / 60L; val s = totalSec % 60L
+    return if (h > 0L) String.format(Locale.getDefault(), "%02d:%02d:%02d", h, m, s) else String.format(Locale.getDefault(), "%02d:%02d", m, s)
 }
