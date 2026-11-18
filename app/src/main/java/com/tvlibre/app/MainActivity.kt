@@ -107,6 +107,17 @@ fun TvLibreAndroidTvApp() {
     var favoriteUrls by remember {
         mutableStateOf(prefs.getStringSet("fav_urls", emptySet()) ?: emptySet())
     }
+    var historyList by remember {
+        mutableStateOf(
+            prefs.getString("history_json", "[]")?.let { raw ->
+                val arr = JSONArray(raw)
+                List(arr.length()) {
+                    val o = arr.getJSONObject(it)
+                    TvChannel("hist_$it", o.getString("title"), o.optString("category", "Reciente"), o.getString("url"))
+                }
+            } ?: emptyList()
+        )
+    }
 
     var currentStreamUrl by remember { mutableStateOf("") }
     var currentStreamTitle by remember { mutableStateOf("Selecciona un canal o evento") }
@@ -154,6 +165,17 @@ fun TvLibreAndroidTvApp() {
         if (url.isBlank()) return
         currentStreamUrl = url
         currentStreamTitle = title
+        val updatedHist = (listOf(TvChannel("h", title, "Visto recientemente", url)) + historyList.filter { it.streamUrl != url }).take(20)
+        historyList = updatedHist
+        val hArr = JSONArray()
+        updatedHist.forEach { item ->
+            hArr.put(org.json.JSONObject().apply {
+                put("title", item.title)
+                put("category", item.category)
+                put("url", item.streamUrl)
+            })
+        }
+        prefs.edit().putString("history_json", hArr.toString()).apply()
         if (fullScreenNow) isFullscreen = true
         exoPlayer.setMediaItem(MediaItem.fromUri(url))
         exoPlayer.prepare()
@@ -467,8 +489,8 @@ fun TvLibreAndroidTvApp() {
 
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     TvBannerIcon(Icons.Default.Search, "Buscar") { showSearchBar = !showSearchBar }
-                    TvBannerIcon(Icons.Default.History, "Favoritos") { activeSection = "FAVORITOS" }
-                    TvBannerIcon(Icons.Default.PersonAdd, "Agregar Lista") { showSourceDialog = true }
+                    TvBannerIcon(Icons.Default.History, "Continuar viendo") { activeSection = "HISTORIAL" }
+                    TvBannerIcon(Icons.Default.Person, "Perfil y Listas") { showSourceDialog = true }
                     TvBannerIcon(Icons.Default.Refresh, "Actualizar") { scope.launch { reloadAllData() } }
                     Text(
                         clockText,
@@ -490,12 +512,11 @@ fun TvLibreAndroidTvApp() {
                 "PELICULAS" to "PELÍCULAS",
                 "SERIES" to "SERIES",
                 "FAVORITOS" to "FAVORITOS",
-                "ADD_M3U" to "+ M3U",
-                "ADD_XTREAM" to "+ XTREAM"
+                "ADD_SOURCE" to "+ M3U / XTREAM"
             )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 tabs.forEach { (key, label) ->
-                    val isActionPill = key == "ADD_M3U" || key == "ADD_XTREAM"
+                    val isActionPill = key == "ADD_SOURCE"
                     val selected = activeSection == key
                     var focused by remember { mutableStateOf(false) }
                     Box(
@@ -828,6 +849,44 @@ fun TvLibreAndroidTvApp() {
                                     Spacer(Modifier.height(8.dp))
                                     Text(item.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                     Text(item.category, color = AccentCyan, fontSize = 11.sp, maxLines = 1)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            "HISTORIAL" -> {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Text("Continuar viendo / Historial (${historyList.size})", color = AccentCyan, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Spacer(Modifier.height(12.dp))
+                    if (historyList.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)).background(CardDark),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("Aquí aparecerán los canales, películas y series que hayas visto recientemente.", color = Color.LightGray)
+                        }
+                    } else {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(4),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(historyList) { item ->
+                                var focused by remember { mutableStateOf(false) }
+                                Column(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (focused) AccentCyan.copy(alpha = 0.25f) else CardDark)
+                                        .border(if (focused) 2.dp else 0.dp, Color.White, RoundedCornerShape(12.dp))
+                                        .onFocusChanged { focused = it.isFocused }
+                                        .focusable()
+                                        .clickable { playStream(item.streamUrl, item.title, true) }
+                                        .padding(14.dp)
+                                ) {
+                                    Text(item.title, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(item.category, color = AccentCyan, fontSize = 12.sp)
                                 }
                             }
                         }
