@@ -137,8 +137,8 @@ fun TvLibreAndroidTvApp() {
                 val arr = JSONArray(raw)
                 List(arr.length()) {
                     val o = arr.getJSONObject(it)
-                    TvChannel("hist_$it", o.getString("title"), o.optString("category", "Visto recientemente"), o.getString("url"))
-                }
+                    TvChannel("hist_$it", o.getString("title"), o.optString("category", "Película / Serie"), o.getString("url"))
+                }.filter { it.category != "Canal TV" && it.category != "Visto recientemente" }
             } ?: emptyList()
         )
     }
@@ -200,17 +200,24 @@ fun TvLibreAndroidTvApp() {
         isCurrentVod = isVod
         if (fullScreenNow) isFullscreen = true
 
-        val updatedHist = (listOf(TvChannel("h", title, if (isVod) "Película / Serie" else "Canal TV", url)) + historyList.filter { it.streamUrl != url }).take(20)
-        historyList = updatedHist
-        val hArr = JSONArray()
-        updatedHist.forEach { item ->
-            hArr.put(JSONObject().apply {
-                put("title", item.title)
-                put("category", item.category)
-                put("url", item.streamUrl)
-            })
+        if (isVod) {
+            val updatedHist = (listOf(TvChannel("h", title, "Película / Serie", url)) + historyList.filter { it.streamUrl != url }).take(20)
+            historyList = updatedHist
+            val hArr = JSONArray()
+            updatedHist.forEach { item ->
+                hArr.put(JSONObject().apply {
+                    put("title", item.title)
+                    put("category", item.category)
+                    put("url", item.streamUrl)
+                })
+            }
+            prefs.edit().putString("history_json", hArr.toString()).apply()
+        } else {
+            prefs.edit()
+                .putString("last_live_url", url)
+                .putString("last_live_title", title)
+                .apply()
         }
-        prefs.edit().putString("history_json", hArr.toString()).apply()
 
         exoPlayer.setMediaItem(MediaItem.fromUri(url))
         exoPlayer.prepare()
@@ -273,9 +280,11 @@ fun TvLibreAndroidTvApp() {
                 matches = cleanMat
                 statusText = "${cleanCh.size} canales • ${cleanMat.size} partidos • ${cleanMov.size} cine"
                 if (currentStreamUrl.isEmpty() && cleanCh.isNotEmpty()) {
-                    val firstSafe = cleanCh.firstOrNull { !isAdultContent(it.title, it.category) }
-                    if (firstSafe != null) {
-                        playStream(firstSafe.streamUrl, firstSafe.title, false, false)
+                    val savedLastUrl = prefs.getString("last_live_url", "") ?: ""
+                    val savedLastCh = cleanCh.firstOrNull { it.streamUrl == savedLastUrl && !isAdultContent(it.title, it.category) }
+                    val targetCh = savedLastCh ?: cleanCh.firstOrNull { !isAdultContent(it.title, it.category) }
+                    if (targetCh != null) {
+                        playStream(targetCh.streamUrl, targetCh.title, false, false)
                     }
                 }
             }
@@ -629,7 +638,9 @@ fun TvLibreAndroidTvApp() {
                     Icon(Icons.Default.LiveTv, contentDescription = null, tint = Color.White, modifier = Modifier.size(30.dp))
                     Spacer(Modifier.width(10.dp))
                     Text("TV LIBRE", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 21.sp, maxLines = 1, softWrap = false)
-                    Spacer(Modifier.width(14.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Text("• César IA", color = Color.White.copy(alpha = 0.78f), fontWeight = FontWeight.SemiBold, fontSize = 12.sp, maxLines = 1, softWrap = false)
+                    Spacer(Modifier.width(12.dp))
                     Text(statusText, color = Color.White.copy(alpha = 0.88f), fontSize = 12.sp, maxLines = 1, softWrap = false)
                 }
 
@@ -708,11 +719,11 @@ fun TvLibreAndroidTvApp() {
             }
         }
 
-        // Contenido inferior con Paleta Pizarra Índigo Profundo
+        // Contenido inferior continuo de borde a borde (sin cajas encerradas)
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 14.dp)
+                .background(BgIndigoDeep)
         ) {
             if (showSearchBar) {
                 OutlinedTextField(
@@ -741,19 +752,16 @@ fun TvLibreAndroidTvApp() {
                     }
                     val sectionLabel = if (activeSection == "DEPORTES") "Canales de Deportes (${filteredCh.size})" else "Lista de canales (${filteredCh.size})"
 
-                    Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                    Row(modifier = Modifier.fillMaxSize()) {
                         Column(
                             modifier = Modifier
                                 .weight(0.36f)
                                 .fillMaxHeight()
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(PanelSlate)
-                                .border(1.dp, AccentPurple.copy(alpha = 0.28f), RoundedCornerShape(14.dp))
-                                .padding(12.dp)
+                                .padding(start = 20.dp, end = 12.dp, top = 12.dp, bottom = 10.dp)
                         ) {
-                            Text(sectionLabel, color = AccentCyan, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Text(sectionLabel, color = AccentCyan, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.padding(horizontal = 8.dp))
                             Spacer(Modifier.height(8.dp))
-                            LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 itemsIndexed(filteredCh) { idx, ch ->
                                     var focused by remember { mutableStateOf(false) }
                                     val isPlaying = ch.streamUrl == currentStreamUrl
@@ -764,9 +772,9 @@ fun TvLibreAndroidTvApp() {
                                             .clip(RoundedCornerShape(10.dp))
                                             .background(
                                                 when {
-                                                    focused -> Brush.horizontalGradient(listOf(AccentPurple.copy(alpha = 0.65f), AccentCyan.copy(alpha = 0.45f)))
-                                                    isPlaying -> Brush.horizontalGradient(listOf(CardFocus, CardFocus))
-                                                    else -> Brush.horizontalGradient(listOf(Color(0xFF0E1428), Color(0xFF0E1428)))
+                                                    focused -> Brush.horizontalGradient(listOf(AccentPurple.copy(alpha = 0.72f), AccentCyan.copy(alpha = 0.50f)))
+                                                    isPlaying -> Brush.horizontalGradient(listOf(PanelSlate, PanelSlate))
+                                                    else -> Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
                                                 }
                                             )
                                             .border(if (focused) 1.5.dp else 0.dp, Color.White, RoundedCornerShape(10.dp))
@@ -778,7 +786,7 @@ fun TvLibreAndroidTvApp() {
                                                     else playStream(ch.streamUrl, ch.title, false, false)
                                                 }
                                             }
-                                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                                            .padding(horizontal = 10.dp, vertical = 9.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text("${idx + 1}", color = AccentCyan, fontWeight = FontWeight.Bold, modifier = Modifier.width(34.dp))
@@ -790,7 +798,7 @@ fun TvLibreAndroidTvApp() {
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
-                                            Text(ch.category, color = Color.LightGray.copy(alpha = 0.7f), fontSize = 11.sp, maxLines = 1)
+                                            Text(ch.category, color = Color.LightGray.copy(alpha = 0.65f), fontSize = 11.sp, maxLines = 1)
                                         }
                                         if (ch.streamUrl in favoriteUrls) {
                                             Icon(Icons.Default.Favorite, null, tint = AccentPink, modifier = Modifier.size(16.dp))
@@ -800,15 +808,19 @@ fun TvLibreAndroidTvApp() {
                             }
                         }
 
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .fillMaxHeight()
+                                .background(Color.White.copy(alpha = 0.08f))
+                        )
+
                         Column(
                             modifier = Modifier
                                 .weight(0.64f)
                                 .fillMaxHeight()
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(Color.Black)
-                                .border(1.dp, AccentPurple.copy(alpha = 0.25f), RoundedCornerShape(14.dp))
                         ) {
-                            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                            Box(modifier = Modifier.weight(1f).fillMaxWidth().background(Color.Black)) {
                                 AndroidView(
                                     factory = { ctx ->
                                         PlayerView(ctx).apply {
@@ -824,8 +836,8 @@ fun TvLibreAndroidTvApp() {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .background(PanelSlate)
-                                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                                    .background(BgIndigoDeep)
+                                    .padding(horizontal = 20.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
@@ -842,7 +854,7 @@ fun TvLibreAndroidTvApp() {
                                     if (currentStreamUrl.isNotEmpty()) {
                                         TvFocusButton(
                                             if (currentStreamUrl in favoriteUrls) "Quitar Fav" else "+ Favorito",
-                                            CardFocus
+                                            PanelSlate
                                         ) { toggleFavorite(currentStreamUrl) }
                                     }
                                     TvFocusButton("Pantalla Completa", AccentOrange) { isFullscreen = true }
@@ -853,6 +865,7 @@ fun TvLibreAndroidTvApp() {
                 }
 
                 "PARTIDOS" -> {
+                    Box(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 14.dp)) {
                     var selectedLeague by remember { mutableStateOf("Todos") }
                     val leagues = remember(matches) { listOf("Todos") + matches.map { it.league }.distinct() }
                     val filteredMatches = matches.filter {
@@ -938,7 +951,11 @@ fun TvLibreAndroidTvApp() {
                     }
                 }
 
+                    }
+                }
+
                 "PELICULAS", "SERIES" -> {
+                    Box(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 14.dp)) {
                     val baseVod = if (activeSection == "PELICULAS") movies else series
                     var selectedGenre by remember { mutableStateOf("Todo") }
                     val genres = remember(baseVod) { listOf("Todo") + baseVod.map { it.category }.distinct().take(12) }
@@ -1045,7 +1062,11 @@ fun TvLibreAndroidTvApp() {
                     }
                 }
 
+                    }
+                }
+
                 "HISTORIAL" -> {
+                    Box(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 14.dp)) {
                     Column(modifier = Modifier.fillMaxSize()) {
                         Text("Continuar viendo / Historial (${historyList.size})", color = AccentCyan, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                         Spacer(Modifier.height(12.dp))
@@ -1088,7 +1109,11 @@ fun TvLibreAndroidTvApp() {
                     }
                 }
 
+                    }
+                }
+
                 "FAVORITOS" -> {
+                    Box(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 14.dp)) {
                     val favChannels = channels.filter { it.streamUrl in favoriteUrls }
                     Column(modifier = Modifier.fillMaxSize()) {
                         Text("Mis Canales Favoritos (${favChannels.size})", color = AccentCyan, fontWeight = FontWeight.Bold, fontSize = 18.sp)
@@ -1130,6 +1155,7 @@ fun TvLibreAndroidTvApp() {
                         }
                     }
                 }
+                    }
             }
         }
     }
