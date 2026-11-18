@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
@@ -88,6 +90,57 @@ fun isSportsChannel(title: String, category: String): Boolean {
     val combined = "$title $category".lowercase()
     val keywords = listOf("deporte", "sport", "espn", "fox sport", "tnt sport", "tyc", "directv", "dsports", "gol", "liga", "futbol", "fútbol", "bein", "dazn", "nba", "ufc", "f1", "formula 1", "claro sport", "movistar deporte", "l1 max", "liga 1")
     return keywords.any { it in combined }
+}
+
+
+fun resolveChannelLogo(title: String, rawLogo: String): String {
+    if (rawLogo.startsWith("http")) return rawLogo
+    val t = title.lowercase()
+    return when {
+        "america" in t || "américa" in t -> "https://upload.wikimedia.org/wikipedia/commons/thumb/3/34/Am%C3%A9rica_Televisi%C3%B3n_logo_2022.svg/240px-Am%C3%A9rica_Televisi%C3%B3n_logo_2022.svg.png"
+        "atv" in t -> "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/ATV_Per%C3%BA_logo_2014.svg/240px-ATV_Per%C3%BA_logo_2014.svg.png"
+        "latina" in t -> "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Latina_Televisi%C3%B3n_logo.svg/240px-Latina_Televisi%C3%B3n_logo.svg.png"
+        "panamericana" in t -> "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Panamericana_Televisi%C3%B3n_logo.svg/240px-Panamericana_Televisi%C3%B3n_logo.svg.png"
+        "willax" in t -> "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1d/Willax_Televisi%C3%B3n_logo.svg/240px-Willax_Televisi%C3%B3n_logo.svg.png"
+        "tv peru" in t || "tv perú" in t -> "https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/TV_Per%C3%BA_logo_2019.svg/240px-TV_Per%C3%BA_logo_2019.svg.png"
+        "golperu" in t || "gol peru" in t -> "https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/GolPer%C3%BA_logo.svg/240px-GolPer%C3%BA_logo.svg.png"
+        "l1 max" in t || "liga 1" in t -> "https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/L1_MAX_logo.png/240px-L1_MAX_logo.png"
+        "espn" in t -> "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/ESPN_wordmark.svg/240px-ESPN_wordmark.svg.png"
+        "fox sport" in t -> "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/FOX_Sports_logo.svg/240px-FOX_Sports_logo.svg.png"
+        "dsports" in t || "directv" in t -> "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/DSports_logo.svg/240px-DSports_logo.svg.png"
+        "tnt sport" in t -> "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d3/TNT_Sports_2021_logo.svg/240px-TNT_Sports_2021_logo.svg.png"
+        "tyc" in t -> "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/TyC_Sports_logo.svg/240px-TyC_Sports_logo.svg.png"
+        else -> ""
+    }
+}
+
+@Composable
+fun ChannelLogoBadge(title: String, logoUrl: String) {
+    val resolved = remember(title, logoUrl) { resolveChannelLogo(title, logoUrl) }
+    val initials = remember(title) {
+        title.trim().split(" ").filter { it.isNotEmpty() }.take(2).joinToString("") { it.take(1).uppercase() }.ifEmpty { "TV" }
+    }
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color.White.copy(alpha = 0.12f))
+            .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(8.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(initials, color = AccentCyan, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+        if (resolved.isNotEmpty()) {
+            AsyncImage(
+                model = resolved,
+                contentDescription = title,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.White.copy(alpha = 0.92f))
+                    .padding(3.dp)
+            )
+        }
+    }
 }
 
 class MainActivity : ComponentActivity() {
@@ -789,7 +842,9 @@ fun TvLibreAndroidTvApp() {
                                             .padding(horizontal = 10.dp, vertical = 9.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text("${idx + 1}", color = AccentCyan, fontWeight = FontWeight.Bold, modifier = Modifier.width(34.dp))
+                                        Text("${idx + 1}", color = AccentCyan, fontWeight = FontWeight.Bold, modifier = Modifier.width(30.dp))
+                                        ChannelLogoBadge(ch.title, ch.logoUrl)
+                                        Spacer(Modifier.width(10.dp))
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
                                                 if (locked) "🔒 ${ch.title}" else ch.title,
@@ -1033,6 +1088,14 @@ fun TvLibreAndroidTvApp() {
                                                 tint = if (locked) AccentPink else AccentCyan,
                                                 modifier = Modifier.size(44.dp)
                                             )
+                                            if (!locked && item.posterUrl.startsWith("http")) {
+                                                AsyncImage(
+                                                    model = item.posterUrl,
+                                                    contentDescription = item.title,
+                                                    contentScale = ContentScale.Crop,
+                                                    modifier = Modifier.fillMaxSize()
+                                                )
+                                            }
                                             if (item.rating.isNotEmpty()) {
                                                 Text(
                                                     "★ ${item.rating}",
