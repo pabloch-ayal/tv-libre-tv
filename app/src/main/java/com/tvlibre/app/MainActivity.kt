@@ -865,7 +865,6 @@ fun TvLibreAndroidTvApp() {
                 }
 
                 "PARTIDOS" -> {
-                    Box(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 14.dp)) {
                     var selectedLeague by remember { mutableStateOf("Todos") }
                     val leagues = remember(matches) { listOf("Todos") + matches.map { it.league }.distinct() }
                     val filteredMatches = matches.filter {
@@ -955,7 +954,6 @@ fun TvLibreAndroidTvApp() {
                 }
 
                 "PELICULAS", "SERIES" -> {
-                    Box(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 14.dp)) {
                     val baseVod = if (activeSection == "PELICULAS") movies else series
                     var selectedGenre by remember { mutableStateOf("Todo") }
                     val genres = remember(baseVod) { listOf("Todo") + baseVod.map { it.category }.distinct().take(12) }
@@ -1066,7 +1064,6 @@ fun TvLibreAndroidTvApp() {
                 }
 
                 "HISTORIAL" -> {
-                    Box(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 14.dp)) {
                     Column(modifier = Modifier.fillMaxSize()) {
                         Text("Continuar viendo / Historial (${historyList.size})", color = AccentCyan, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                         Spacer(Modifier.height(12.dp))
@@ -1113,7 +1110,6 @@ fun TvLibreAndroidTvApp() {
                 }
 
                 "FAVORITOS" -> {
-                    Box(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 14.dp)) {
                     val favChannels = channels.filter { it.streamUrl in favoriteUrls }
                     Column(modifier = Modifier.fillMaxSize()) {
                         Text("Mis Canales Favoritos (${favChannels.size})", color = AccentCyan, fontWeight = FontWeight.Bold, fontSize = 18.sp)
@@ -1152,13 +1148,13 @@ fun TvLibreAndroidTvApp() {
                                     }
                                 }
                             }
-                        }
-                    }
-                }
-                    }
-            }
-        }
-    }
+                        
+                    
+                
+                    
+            
+        
+    
 
     // 3. DIÁLOGO DE SINOPSIS VOD (PELÍCULAS / SERIES)
     selectedVodDetail?.let { vod ->
