@@ -246,6 +246,12 @@ fun TvLibreAndroidTvApp() {
         }
     }
 
+    val httpDataSourceFactory = remember {
+        DefaultHttpDataSource.Factory()
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(10000)
+            .setReadTimeoutMs(10000)
+    }
     val exoPlayer = remember {
         val httpFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("VLC/3.0.18 LibVLC/3.0.18")
