@@ -76,6 +76,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            window.decorView.defaultFocusHighlightEnabled = false
+        }
         setContent {
             TvLibreAndroidTvApp()
         }
@@ -272,6 +275,8 @@ fun TvLibreAndroidTvApp() {
                         player = exoPlayer
                         useController = false
                         isFocusable = false
+                        isFocusableInTouchMode = false
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) { defaultFocusHighlightEnabled = false }
                         layoutParams = FrameLayout.LayoutParams(
                             FrameLayout.LayoutParams.MATCH_PARENT,
                             FrameLayout.LayoutParams.MATCH_PARENT
@@ -610,6 +615,8 @@ fun TvLibreAndroidTvApp() {
                                         player = exoPlayer
                                         useController = false
                                         isFocusable = false
+                        isFocusableInTouchMode = false
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) { defaultFocusHighlightEnabled = false }
                                     }
                                 },
                                 modifier = Modifier.fillMaxSize()
