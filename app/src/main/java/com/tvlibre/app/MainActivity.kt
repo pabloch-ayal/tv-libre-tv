@@ -65,7 +65,7 @@ import java.util.Date
 import java.util.Locale
 
 // Paleta Pizarra Índigo Profundo + Banner Degradado
-private val BgIndigoDeep = Color(0xFF0B0F1E)
+private val BgIndigoDeep = Color(0xFF090D18)
 private val PanelSlate = Color(0xFF141B33)
 private val CardFocus = Color(0xFF1E293B)
 private val AccentCyan = Color(0xFF06B6D4)
@@ -114,30 +114,51 @@ fun resolveChannelLogo(title: String, rawLogo: String): String {
     }
 }
 
+val BadgePalette = listOf(
+    Color(0xFFF59E0B), // Ámbar / Naranja (como AT)
+    Color(0xFF10B981), // Esmeralda / Verde (como AS)
+    Color(0xFF3B82F6), // Azul brillante
+    Color(0xFF8B5CF6), // Violeta
+    Color(0xFFEC4899), // Rosa / Magenta
+    Color(0xFF06B6D4), // Cian
+    Color(0xFFEF4444)  // Coral / Rojo
+)
+
 @Composable
 fun ChannelLogoBadge(title: String, logoUrl: String) {
-    val resolved = remember(title, logoUrl) { resolveChannelLogo(title, logoUrl) }
-    val initials = remember(title) {
-        title.trim().split(" ").filter { it.isNotEmpty() }.take(2).joinToString("") { it.take(1).uppercase() }.ifEmpty { "TV" }
+    val cleanName = remember(title) { title.replace(Regex("\\([^)]*\\)|\\[[^\\]]*\\]"), "").trim() }
+    val initials = remember(cleanName) {
+        val words = cleanName.split(" ").filter { it.isNotEmpty() }
+        when {
+            words.size >= 2 -> (words[0].take(1) + words[1].take(1)).uppercase()
+            words.size == 1 -> words[0].take(2).uppercase()
+            else -> "TV"
+        }
     }
+    val badgeColor = remember(cleanName) {
+        val idx = kotlin.math.abs(cleanName.hashCode()) % BadgePalette.size
+        BadgePalette[idx]
+    }
+    var logoLoaded by remember(logoUrl) { mutableStateOf(false) }
+
     Box(
         modifier = Modifier
-            .size(36.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color.White.copy(alpha = 0.12f))
-            .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(8.dp)),
+            .size(38.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (logoLoaded) Color.White.copy(alpha = 0.94f) else badgeColor),
         contentAlignment = Alignment.Center
     ) {
-        Text(initials, color = AccentCyan, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
-        if (resolved.isNotEmpty()) {
+        if (!logoLoaded) {
+            Text(initials, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, maxLines = 1)
+        }
+        if (logoUrl.startsWith("http")) {
             AsyncImage(
-                model = resolved,
+                model = logoUrl,
                 contentDescription = title,
                 contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.White.copy(alpha = 0.92f))
-                    .padding(3.dp)
+                onSuccess = { logoLoaded = true },
+                onError = { logoLoaded = false },
+                modifier = Modifier.fillMaxSize().padding(if (logoLoaded) 3.dp else 0.dp)
             )
         }
     }
@@ -198,6 +219,11 @@ fun TvLibreAndroidTvApp() {
 
     var currentStreamUrl by remember { mutableStateOf("") }
     var currentStreamTitle by remember { mutableStateOf("Selecciona un canal o evento") }
+    var streamOfflineMessage by remember { mutableStateOf<String?>(null) }
+    var triedUrlsForCurrent by remember { mutableStateOf(setOf<String>()) }
+    var hiddenChannelUrls by remember {
+        mutableStateOf(prefs.getStringSet("hidden_urls", emptySet()) ?: emptySet())
+    }
     var selectedVodDetail by remember { mutableStateOf<VodItem?>(null) }
     var detailedPlot by remember { mutableStateOf("") }
 
@@ -246,32 +272,26 @@ fun TvLibreAndroidTvApp() {
         }
     }
 
-    fun playStream(url: String, title: String, fullScreenNow: Boolean = false, isVod: Boolean = false) {
+    fun playStream(
+        url: String,
+        title: String,
+        openFullscreen: Boolean = false,
+        isVod: Boolean = false,
+        userAgent: String = "",
+        referer: String = "",
+        resetTried: Boolean = true
+    ) {
         if (url.isBlank()) return
         currentStreamUrl = url
         currentStreamTitle = title
-        isCurrentVod = isVod
-        if (fullScreenNow) isFullscreen = true
+        streamOfflineMessage = null
+        if (resetTried) triedUrlsForCurrent = setOf(url)
 
-        if (isVod) {
-            val updatedHist = (listOf(TvChannel("h", title, "Película / Serie", url)) + historyList.filter { it.streamUrl != url }).take(20)
-            historyList = updatedHist
-            val hArr = JSONArray()
-            updatedHist.forEach { item ->
-                hArr.put(JSONObject().apply {
-                    put("title", item.title)
-                    put("category", item.category)
-                    put("url", item.streamUrl)
-                })
-            }
-            prefs.edit().putString("history_json", hArr.toString()).apply()
-        } else {
-            prefs.edit()
-                .putString("last_live_url", url)
-                .putString("last_live_title", title)
-                .apply()
-        }
-
+        val headers = mutableMapOf<String, String>()
+        if (referer.isNotBlank()) headers["Referer"] = referer
+        val effectiveUa = userAgent.ifBlank { "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" }
+        httpDataSourceFactory.setUserAgent(effectiveUa)
+        httpDataSourceFactory.setDefaultRequestProperties(headers)
         exoPlayer.setMediaItem(MediaItem.fromUri(url))
         exoPlayer.prepare()
         exoPlayer.playWhenReady = true
@@ -337,7 +357,7 @@ fun TvLibreAndroidTvApp() {
                     val savedLastCh = cleanCh.firstOrNull { it.streamUrl == savedLastUrl && !isAdultContent(it.title, it.category) }
                     val targetCh = savedLastCh ?: cleanCh.firstOrNull { !isAdultContent(it.title, it.category) }
                     if (targetCh != null) {
-                        playStream(targetCh.streamUrl, targetCh.title, false, false)
+                        playStream(targetCh.streamUrl, targetCh.title, false, false, targetCh.userAgent, targetCh.referer)
                     }
                 }
             }
@@ -665,6 +685,29 @@ fun TvLibreAndroidTvApp() {
         return
     }
 
+
+    LaunchedEffect(currentStreamUrl) {
+        if (currentStreamUrl.isBlank()) return@LaunchedEffect
+        kotlinx.coroutines.delay(7000L)
+        val state = exoPlayer.playbackState
+        if (state != Player.STATE_READY || !exoPlayer.isPlaying) {
+            val baseName = currentStreamTitle.replace(Regex("\\([^)]*\\)|\\[[^\\]]*\\]"), "").trim().lowercase()
+            val alt = channels.firstOrNull { ch ->
+                ch.streamUrl !in triedUrlsForCurrent &&
+                ch.streamUrl !in hiddenChannelUrls &&
+                ch.title.replace(Regex("\\([^)]*\\)|\\[[^\\]]*\\]"), "").trim().lowercase() == baseName
+            }
+            if (alt != null) {
+                triedUrlsForCurrent = triedUrlsForCurrent + alt.streamUrl
+                playStream(alt.streamUrl, alt.title, isFullscreen, false, alt.userAgent, alt.referer, resetTried = false)
+            } else {
+                streamOfflineMessage = "Señal no disponible o bloqueada por región/servidor"
+            }
+        } else {
+            streamOfflineMessage = null
+        }
+    }
+
     // 2. INTERFAZ PRINCIPAL: BANNER DE BORDE A BORDE + LIENZO CONTINUO SIN CAJAS
     Column(
         modifier = Modifier
@@ -724,7 +767,7 @@ fun TvLibreAndroidTvApp() {
                                 isActionPill -> Color.Black.copy(alpha = 0.28f)
                                 else -> Color.White.copy(alpha = 0.16f)
                             })
-                            .border(if (focused || selected) 1.5.dp else if (isActionPill) 1.dp else 0.dp, if (isActionPill && !focused) Color.White.copy(alpha = 0.55f) else Color.White, RoundedCornerShape(50))
+                            .border(if (focused) 1.5.dp else 0.dp, Color.White, RoundedCornerShape(50))
                             .onFocusChanged { focused = it.isFocused }
                             .focusable()
                             .clickable { if (isActionPill) showSourceDialog = true else activeSection = key }
@@ -749,7 +792,10 @@ fun TvLibreAndroidTvApp() {
             when (activeSection) {
                 "TV", "DEPORTES" -> {
                     val baseList = if (activeSection == "DEPORTES") channels.filter { isSportsChannel(it.title, it.category) } else channels
-                    val filteredCh = baseList.filter { searchQuery.isBlank() || it.title.contains(searchQuery, true) || it.category.contains(searchQuery, true) }
+                    val filteredCh = baseList.filter {
+                        it.streamUrl !in hiddenChannelUrls &&
+                        (searchQuery.isBlank() || it.title.contains(searchQuery, true) || it.category.contains(searchQuery, true))
+                    }
                     val sectionLabel = if (activeSection == "DEPORTES") "Canales de Deportes (${filteredCh.size})" else "Lista de canales (${filteredCh.size})"
                     Row(modifier = Modifier.fillMaxSize()) {
                         Column(modifier = Modifier.weight(0.36f).fillMaxHeight().padding(start = 20.dp, end = 12.dp, top = 12.dp, bottom = 10.dp)) {
@@ -774,7 +820,7 @@ fun TvLibreAndroidTvApp() {
                                             .focusable()
                                             .clickable {
                                                 executeProtected(ch.title, ch.category) {
-                                                    if (isPlaying) isFullscreen = true else playStream(ch.streamUrl, ch.title, false, false)
+                                                    if (isPlaying) isFullscreen = true else playStream(ch.streamUrl, ch.title, false, false, ch.userAgent, ch.referer)
                                                 }
                                             }
                                             .padding(horizontal = 10.dp, vertical = 9.dp),
@@ -799,6 +845,27 @@ fun TvLibreAndroidTvApp() {
                                     factory = { ctx -> PlayerView(ctx).apply { player = exoPlayer; useController = false; isFocusable = false; isFocusableInTouchMode = false } },
                                     modifier = Modifier.fillMaxSize()
                                 )
+                                streamOfflineMessage?.let { msg ->
+                                    Column(
+                                        modifier = Modifier
+                                            .align(Alignment.Center)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(Color(0xE6090D18))
+                                            .padding(horizontal = 24.dp, vertical = 18.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Text(msg, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                        TvFocusButton("Ocultar canal caído", AccentPink) {
+                                            val updated = hiddenChannelUrls + currentStreamUrl
+                                            hiddenChannelUrls = updated
+                                            prefs.edit().putStringSet("hidden_urls", updated).apply()
+                                            streamOfflineMessage = null
+                                            val nextCh = channels.firstOrNull { it.streamUrl !in updated && !isAdultContent(it.title, it.category) }
+                                            if (nextCh != null) playStream(nextCh.streamUrl, nextCh.title, false, false, nextCh.userAgent, nextCh.referer)
+                                        }
+                                    }
+                                }
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth().background(BgIndigoDeep).padding(horizontal = 20.dp, vertical = 12.dp),
@@ -1094,8 +1161,8 @@ fun TvFocusButton(text: String, baseColor: Color, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     Box(
         modifier = Modifier.clip(RoundedCornerShape(50))
-            .background(if (focused) baseColor.copy(alpha = 0.95f) else baseColor.copy(alpha = 0.72f))
-            .border(if (focused) 2.dp else 1.dp, if (focused) AccentCyan else Color.White.copy(alpha = 0.22f), RoundedCornerShape(50))
+            .background(if (focused) AccentCyan else baseColor)
+            .border(if (focused) 1.5.dp else 0.dp, Color.White, RoundedCornerShape(50))
             .onFocusChanged { focused = it.isFocused }.focusable().clickable { onClick() }.padding(horizontal = 16.dp, vertical = 8.dp)
     ) { Text(text, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, softWrap = false) }
 }
