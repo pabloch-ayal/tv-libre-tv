@@ -12,7 +12,9 @@ data class TvChannel(
     val category: String,
     val streamUrl: String,
     val logoUrl: String = "",
-    val isLive: Boolean = true
+    val isLive: Boolean = true,
+    val userAgent: String = "",
+    val referer: String = ""
 )
 
 data class VodItem(
@@ -27,7 +29,9 @@ data class VodItem(
     val isSeries: Boolean = false,
     val xtreamHost: String = "",
     val xtreamUser: String = "",
-    val xtreamPass: String = ""
+    val xtreamPass: String = "",
+    val userAgent: String = "",
+    val referer: String = ""
 )
 
 data class MatchEvent(
@@ -36,7 +40,9 @@ data class MatchEvent(
     val teamB: String,
     val timeLabel: String,
     val league: String,
-    val streamUrl: String
+    val streamUrl: String,
+    val userAgent: String = "",
+    val referer: String = ""
 )
 
 fun fetchUrlSmart(urlStr: String): String {
